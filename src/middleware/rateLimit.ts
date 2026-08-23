@@ -13,7 +13,6 @@ export const authRateLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: "RATE_LIMITED", message: "Too many attempts. Please try again later." },
   store: new RedisStore({
-    // @ts-expect-error -- rate-limit-redis's types lag behind redis v4's API shape
     sendCommand: (...args: string[]) => redis.sendCommand(args),
     prefix: "rl:auth:",
   }),
@@ -26,7 +25,6 @@ export const apiRateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   store: new RedisStore({
-    // @ts-expect-error -- see note above
     sendCommand: (...args: string[]) => redis.sendCommand(args),
     prefix: "rl:api:",
   }),
