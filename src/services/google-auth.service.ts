@@ -5,12 +5,6 @@ import { AuthError } from "./auth.service";
 
 const client = env.GOOGLE_CLIENT_ID ? new OAuth2Client(env.GOOGLE_CLIENT_ID) : null;
 
-interface DeviceContext {
-  ipAddress?: string;
-  userAgent?: string;
-  deviceLabel?: string;
-}
-
 // Verifies the ID token Google's SDK returns on the client (web or mobile),
 // then finds-or-creates the corresponding user. Never trust a googleId or
 // email sent directly from the client without this server-side verification.
