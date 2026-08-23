@@ -1,0 +1,222 @@
+// INSPIR CONNECT — Phase 1 Database Schema
+// Auth + Profiles + RBAC foundation
+// Run: npx prisma migrate dev --name init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// ENUMS
+// ---------------------------------------------------------------------------
+
+enum Role {
+  PLATFORM_OWNER
+  SUPER_ADMIN
+  ADMINISTRATOR
+  MODERATOR
+  SUPPORT_ADMIN
+  BUSINESS_ADMIN
+  COMMUNITY_ADMIN
+  USER
+}
+
+enum AuthProvider {
+  EMAIL
+  PHONE
+  GOOGLE
+}
+
+enum VerificationStatus {
+  NONE
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum AccountStatus {
+  ACTIVE
+  SUSPENDED
+  BANNED
+  DEACTIVATED
+  PENDING_DELETION
+}
+
+// ---------------------------------------------------------------------------
+// CORE IDENTITY
+// ---------------------------------------------------------------------------
+
+model User {
+  id                String        @id @default(uuid())
+  email             String?       @unique
+  phone             String?       @unique
+  passwordHash      String? // null if account is Google-only
+  googleId          String?       @unique
+  primaryProvider   AuthProvider  @default(EMAIL)
+
+  emailVerifiedAt   DateTime?
+  phoneVerifiedAt   DateTime?
+
+  role              Role          @default(USER)
+  status            AccountStatus @default(ACTIVE)
+
+  // Security
+  mfaEnabled        Boolean       @default(false)
+  mfaSecret         String? // encrypted at rest by app layer
+  mfaRecoveryCodes  RecoveryCode[]
+  failedLoginCount  Int           @default(0)
+  lockedUntil       DateTime?
+
+  profile           Profile?
+  sessions          Session[]
+  passwordResets    PasswordResetToken[]
+  verificationReq   VerificationRequest[]
+  auditLogsActor    AuditLog[]    @relation("AuditActor")
+
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  deletedAt         DateTime?
+
+  @@index([email])
+  @@index([phone])
+  @@index([role])
+  @@index([status])
+  @@map("users")
+}
+
+model Profile {
+  id            String   @id @default(uuid())
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  username      String   @unique
+  fullName      String
+  bio           String?  @db.VarChar(500)
+  location      String?
+  occupation    String?
+  interests     String[] @default([])
+
+  avatarUrl     String?
+  coverUrl      String?
+
+  isVerified    Boolean  @default(false)
+  verifiedBadge String? // e.g. "community", "business", "creator"
+
+  followerCount  Int     @default(0) // denormalized counters, reconciled by background job
+  followingCount Int     @default(0)
+  postCount      Int     @default(0)
+
+  privacyLevel  String   @default("public") // public | followers | private
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([username])
+  @@map("profiles")
+}
+
+// ---------------------------------------------------------------------------
+// SESSIONS / TOKENS
+// ---------------------------------------------------------------------------
+
+model Session {
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  refreshTokenHash String @unique
+  deviceLabel  String? // "Chrome on Android", "Expo Go iOS", etc.
+  ipAddress    String?
+  userAgent    String?
+
+  createdAt    DateTime @default(now())
+  lastUsedAt   DateTime @default(now())
+  expiresAt    DateTime
+  revokedAt    DateTime?
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+model RecoveryCode {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash  String
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("recovery_codes")
+}
+
+// ---------------------------------------------------------------------------
+// VERIFICATION (community badge requests)
+// ---------------------------------------------------------------------------
+
+model VerificationRequest {
+  id          String             @id @default(uuid())
+  userId      String
+  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  reason      String             @db.VarChar(1000)
+  category    String // "community", "business", "creator", "organization"
+  evidenceUrl String?
+
+  status      VerificationStatus @default(PENDING)
+  reviewedBy  String? // admin userId
+  reviewNote  String?
+
+  createdAt   DateTime           @default(now())
+  reviewedAt  DateTime?
+
+  @@index([status])
+  @@index([userId])
+  @@map("verification_requests")
+}
+
+// ---------------------------------------------------------------------------
+// ADMIN AUDIT LOG (tamper-resistant: append-only, no update/delete in app code)
+// ---------------------------------------------------------------------------
+
+model AuditLog {
+  id           String   @id @default(uuid())
+  actorId      String
+  actor        User     @relation("AuditActor", fields: [actorId], references: [id])
+
+  action       String // e.g. "USER_SUSPENDED", "VERIFICATION_APPROVED"
+  resourceType String // e.g. "User", "VerificationRequest"
+  resourceId   String
+
+  ipAddress    String?
+  userAgent    String?
+  result       String // "SUCCESS" | "FAILURE"
+  metadata     Json?
+
+  createdAt    DateTime @default(now())
+
+  @@index([actorId])
+  @@index([resourceType, resourceId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
