@@ -6,7 +6,7 @@ import { env } from "../config/env";
 // Ensures the Redis client is actually connected before any command runs.
 // Without this, rate limiting can crash at startup if a request (or the
 // store's own internal setup) arrives before the connection finishes.
-async function sendCommand(...args: string[]) {
+async function sendCommand(...args: string[]): Promise<any> {
   if (!redis.isOpen) {
     await redis.connect();
   }
@@ -23,7 +23,7 @@ export const authRateLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: "RATE_LIMITED", message: "Too many attempts. Please try again later." },
   store: new RedisStore({
-    sendCommand,
+    sendCommand: sendCommand as any,
     prefix: "rl:auth:",
   }),
 });
@@ -35,7 +35,7 @@ export const apiRateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   store: new RedisStore({
-    sendCommand,
+    sendCommand: sendCommand as any,
     prefix: "rl:api:",
   }),
 });
