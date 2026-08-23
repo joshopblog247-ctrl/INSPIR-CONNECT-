@@ -23,10 +23,9 @@ export const authRateLimiter = rateLimit({
   legacyHeaders: false,
   message: { error: "RATE_LIMITED", message: "Too many attempts. Please try again later." },
   store: new RedisStore({
-    // @ts-ignore -- rate-limit-redis's types lag behind redis v4's actual API shape
     sendCommand,
     prefix: "rl:auth:",
-  }),
+  } as any),
 });
 
 // Looser general-purpose limiter for authenticated API traffic.
@@ -36,8 +35,7 @@ export const apiRateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   store: new RedisStore({
-    // @ts-ignore -- see note above
     sendCommand,
     prefix: "rl:api:",
-  }),
+  } as any),
 });
