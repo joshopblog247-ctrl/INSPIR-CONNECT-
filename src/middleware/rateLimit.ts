@@ -3,13 +3,9 @@ import { RedisStore } from "rate-limit-redis";
 import { redis } from "../lib/redis";
 import { env } from "../config/env";
 
-// Ensures the Redis client is actually connected before any command runs.
-// Without this, rate limiting can crash at startup if a request (or the
-// store's own internal setup) arrives before the connection finishes.
+// The Redis client is already connected once at server startup (see
+// server.ts), so this just forwards commands — no connection logic needed.
 async function sendCommand(...args: string[]) {
-  if (!redis.isOpen) {
-    await redis.connect();
-  }
   return redis.sendCommand(args);
 }
 
