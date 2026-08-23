@@ -11,7 +11,7 @@ export interface AccessTokenPayload {
 
 export function signAccessToken(payload: AccessTokenPayload): string {
   return jwt.sign(payload, env.JWT_ACCESS_SECRET, {
-    expiresIn: env.JWT_ACCESS_TTL,
+    expiresIn: env.JWT_ACCESS_TTL as jwt.SignOptions["expiresIn"],
     issuer: "inspir-connect",
   });
 }
