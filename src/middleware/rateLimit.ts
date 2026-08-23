@@ -1,17 +1,17 @@
 import rateLimit from "express-rate-limit";
 import { RedisStore } from "rate-limit-redis";
-import { redis } from "../lib/redis";
+import { redis, connectRedis } from "../lib/redis";
 import { env } from "../config/env";
 
-// The Redis client is already connected once at server startup (see
-// server.ts), so this just forwards commands — no connection logic needed.
+// Reconnects if the client has dropped (e.g. free-tier idle disconnects)
+// before forwarding the command, using the shared safe-reconnect helper.
 async function sendCommand(...args: string[]) {
+  if (!redis.isOpen) {
+    await connectRedis();
+  }
   return redis.sendCommand(args);
 }
 
-// Applied to auth endpoints (login, register, password reset) to blunt
-// credential-stuffing and brute-force attacks. Keyed by IP; login attempts
-// are additionally throttled per-account inside the auth service itself.
 export const authRateLimiter = rateLimit({
   windowMs: env.authRateLimit.windowMs,
   max: env.authRateLimit.max,
@@ -24,7 +24,6 @@ export const authRateLimiter = rateLimit({
   } as any),
 });
 
-// Looser general-purpose limiter for authenticated API traffic.
 export const apiRateLimiter = rateLimit({
   windowMs: 60 * 1000,
   max: 120,
